@@ -1,0 +1,168 @@
+\documentclass[a4paper,10pt]{article}
+\newcommand{\myparagraph}[1]{\paragraph{#1}\mbox{}\\}
+\usepackage[a4paper,margin=3.5cm]{geometry} %Sets the page geometry
+\usepackage{url}
+\usepackage{dirtytalk}
+\usepackage{graphicx} % Package for \includegraphics
+\usepackage{wrapfig} % Figure wrapping
+\usepackage[T1]{fontenc} % Output font encoding for international characters
+\setlength{\parskip}{1em} % Set space when paragraphs are used
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{tcolorbox}
+\usepackage{mathtools}
+
+% Lets you use \blankpage to make a blank page
+\newcommand{\blankpage}{
+\newpage
+\thispagestyle{empty}
+\mbox{}
+\newpage
+}
+
+\usepackage{listings, xcolor}
+\lstset{
+tabsize = 4, %% set tab space width
+showstringspaces = false, %% prevent space marking in strings, string is defined as the text that is generally printed directly to the console
+numbers = left, %% display line numbers on the left
+commentstyle = \color{green}, %% set comment color
+keywordstyle = \color{blue}, %% set keyword color
+stringstyle = \color{red}, %% set string color
+rulecolor = \color{black}, %% set frame color to avoid being affected by text color
+basicstyle = \small \ttfamily , %% set listing font and size
+breaklines = true, %% enable line breaking
+numberstyle = \tiny,
+}
+
+% Self Explanatory
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{definition}{Definition}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
+
+\newcommand{\dollar}{\mbox{\textdollar}}
+
+% Other
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor} %Floor function
+
+\begin{document}
+
+\section{JVM's General Architecture}
+
+Main subjects:
+
+\begin{itemize}
+    \item Runtime Systems
+    \item The Java RunTime Environment (JRE)
+    \item JVM as an abstract machine
+    \item JVM Data Types
+    \item JVM RunTime Data Areas
+    \begin{itemize}
+        \item Thread
+        \item Frames
+        \item Heap
+        \item Non - Heap
+        \item Class Data
+    \end{itemize}
+    \item Method Area
+    \item Disassembling Java Class Files (Javap)
+    \item Constant Pool
+    \item Loading, linking and veryfing class files
+    \item Initialization
+    \item JVM exit
+\end{itemize}
+
+Notes:
+
+\begin{itemize}
+
+    \item JVM is a \textbf{multi-thread stack based} machine, which means that the memory model supposed by the JVM is a \underline{stack} and it is \textbf{multi-thread} because it allows for parallel execution model(using things like \verb|Threads|, \verb|Runnables|)
+
+    \item On slide 14 it is said that there is \textbf{no type information on local variables at runtime}: 
+     \begin{itemize}
+        \item This is only true for a $\verb|class|$ file of version previous than 50.0
+        \item New versions of the JVM attach to every method a $\verb|StackMapTable Attribute|$ which should map type information for local variables.
+     \end{itemize}
+     
+     \item Interestingly, each Thread has 3 areas: its \textbf{p}rogram \textbf{c}ounter, the \textbf{java stack} and the \textbf{native stack}:
+     \begin{itemize}
+        \item \textbf{Native stack} contains the information about native functions(in C/C++) called. It is non-blocking the call to the native code so I dont know which message mechanism is implemented for the callback.
+     \end{itemize} 
+     
+     \item Interestingly, at least for Hotspot JVM, a java \verb|Thread| is mapped to a \textit{native} Thread(i.e. a thread in the operating system running the jvm). So when a Java Thread has to be started, first everything needed is initialized(pc, stack ecc.), then we need the native thread to call the \verb|run()| method on the java's \verb|Thread| object. The \verb|run| call is blocking, thus the OS's thread will only be released when the Java Thread returns.
+          
+\end{itemize}
+
+\section{JVM's instruction architecture}
+
+\begin{itemize}
+    \item The operand stack has 32 bit pushable words.
+        \begin{itemize}
+            \item Nevertheless, instructions are of \textit{variable} length, meaning an instruction is made of two parts, where the second is of variable length:
+            \begin{itemize}
+                \item The \textit{opcode}: one byte representing the operation
+                \item The arguments: one or more byte of arguments.
+            \end{itemize}
+        \end{itemize}
+     \item The are \textbf{4} ways we can address arguments:
+     \begin{itemize}
+         \item \textbf{Immediate Addressing}: the argument is embedded in the opcode: \verb|iload_1| pushes integer 1 on the stack. Its hex repres. is: \verb|00 00 00 1b|.
+         \item \textbf{Variable Addressing}: the \verb|load| and \verb|store| access variables from the \textit{local variable array} by, respectively, pushing something from the array onto the stack and by popping something from the stack and inserting it in the locals area. 
+        \item \textbf{Stack Addressing}: the arguments are taken from the top of the stack, which implies most of the time, popping it. E.g. \verb|ireturn| pops an integer and returns it.
+        \item \textbf{Literal Addressing}: refers to one entry in the \textit{constant pool}, similiar to \verb|Variable Addressing| but for constant pool. E.g. \verb|ldc| (load constant) pushes a constant \#index from a constant pool (\verb|String|, \verb|int|, \verb|float|, \verb|Class|,\\ \verb|java.lang.invoke.MethodType|, \verb|java.lang.invoke.MethodHandle|, or a\\ \verb|dynamically-computed constant)| onto the stack. 
+     \end{itemize}
+     \item Type of method invocation:
+     \begin{itemize}
+         \item \textbf{invoke\_virtual} (virtual is another word for dynamic dispatch): 
+         \begin{lstlisting}[language = Java , frame = trBL , firstnumber = last , escapeinside={(*@}{@*)}] 
+int add12and13() {
+    return addTwo(12, 13);
+}
+         \end{lstlisting}
+         becomes:
+         \begin{lstlisting}[mathescape]
+         int add12and13();
+         descriptor: ()I
+         flags: (0x0000)
+         Code:
+            stack=3, locals=1, args_size=1
+                0: aload_0
+                1: bipush        12
+                3: bipush        13
+                5: invokevirtual #7   // Method addTwo:(II)I
+                8: ireturn
+            LineNumberTable:
+                line 8: 0
+\end{lstlisting}
+    \item \textbf{invoke\_special} (special means we know the class of object on which the method is called at compile time)
+    \begin{description}
+        \item No static flow analysis is done! Thus only really explicit calls are counted e.g. static methods.
+        \item \begin{lstlisting}[language = Java , frame = trBL , firstnumber = last , escapeinside={(*@}{@*)}] 
+class Invoke {
+    static int add12and13() {
+        return 12+13;
+    }
+    
+    public static void main(String[] args) {
+        Invoke.add12and13();
+        
+    }
+}
+            \end{lstlisting}
+            becomes
+       \item
+      \begin{lstlisting}
+    public static void main(java.lang.String[]);
+           descriptor: ([Ljava/lang/String;)V
+            flags: (0x0009) ACC_PUBLIC, ACC_STATIC
+            Code:
+                stack=1, locals=1, args_size=1
+                    0: invokestatic  #7  // add12and13:()I
+                    3: pop
+                    4: return
+      \end{lstlisting}
+    \end{description}
+     \end{itemize}
+\end{itemize}
+
+\end{document}

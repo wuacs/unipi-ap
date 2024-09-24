@@ -1,0 +1,1 @@
+Solutions of those exercises: https://pages.di.unipi.it/corradini/Didattica/AP-23/ESER/01/exercises-1-2023.pdf
